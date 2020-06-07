@@ -1,0 +1,20 @@
+= MGL
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+:toc: left
+:toclevels: 5
+
+**M**athematics for **G**raphics in **L**ua (or **M**athematics for Open**GL**, also an anagram of https://glm.g-truc.net/0.9.9/index.html[GLM]; an inspiration for the library) is a pure Lua math library for graphics purposes.
+
+It aims to be simple, generic and optimized (mostly for LuaJIT).
+
+== Install
+
+See link:src[].
+
+== API
