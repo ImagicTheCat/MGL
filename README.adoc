@@ -17,4 +17,43 @@ It aims to be simple, generic and optimized (mostly for LuaJIT).
 
 See link:src[].
 
+== Concept
+
+MGL design is around types and operators.
+
+=== Operators
+
+Operators have defined behavior for specific prototypes (a list of parameter types: MGL/special types).
+
+Any operator prototype can be (re)defined.
+
+WARNING: When an operator prototype is (re)defined, it will (re)generate the operator function. Previously referenced operators will still work, but without the updated behavior. `listenOps` can be used to update those references.
+
+NOTE: Operators will only check for expected parameters, additional arguments will not trigger an error if a prototype matches.
+
+=== Types
+
+MGL types can be Lua types (number, boolean, etc.) or table-based types from the metatable pool.
+
+Table-based types have pre-defined metamethods to call basic operators like `add`, `mul`, etc.
+
+All types are recognized by a string: the name from the metatable pool or the result of the Lua `type` function.
+
+NOTE: The references from the metatable pool should normally be constants, but the content of the metatable can be modified.
+
+=== Generic types
+
+Generic types are used to generate types based on some parameters.
+
+For example, `vec(D)` for a vector of dimension `D` or `mat(M)x(N)` for a matrix of size `M x N`.
+
 == API
+
+== Performances
+
+.Notes
+- Operators branch to operator prototypes with a generated type-checking function.
+- More an operator has prototypes, more it has type-checking code: only generate required types.
+- This has an overhead, but it is probably be less significant with the LuaJIT interpreter than PUC Lua.
+- However, the LuaJIT compiler may eliminate all of the overhead.
+- In any case, the operator prototype can be retrieved and cached with `getOp` if optimization is needed.
