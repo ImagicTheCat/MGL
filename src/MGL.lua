@@ -31,6 +31,7 @@ local loadstring = loadstring or load
 local type, getmetatable = type, getmetatable
 
 -- Generate function.
+-- name: identify the generated function for debug
 local function mglt_genfunc(code, name)
   local f, err = loadstring(code, "MGL generated "..name)
   if not f then error(err) end
@@ -51,6 +52,7 @@ local function mglt_genlist(t_element, a, b, separator)
   return table.concat(args, separator or ", ")
 end
 
+-- Template substitution.
 -- template: string with $... parameters
 -- args: map of param => value
 -- return processed template
@@ -58,29 +60,25 @@ local function mglt_tplsub(template, args)
   return string.gsub(template, "%$([%w_]+)", args)
 end
 
-local mglt = {
-  genfunc = mglt_genfunc,
-  genlist = mglt_genlist,
-  tplsub = mglt_tplsub
-}
-
 -- MGL interface/data.
 
 local mgl
--- return MGL type (string)
+-- return MGL type (table-based type name or Lua type)
 local function mgl_type(v) return getmetatable(v) and getmetatable(v).MGL_type or type(v) end
 
+-- Format prototype for debug.
 -- id: operator id
--- ...: MGL type parameters
-local function format_opdef(id, ...)
+-- ...: parameter types
+local function format_proto(id, ...)
   local types = {}
   for i, p in ipairs({...}) do table.insert(types, p) end
   return id.."("..table.concat(types, ", ")..")"
 end
 
+-- Format call prototype for debug.
 -- id: operator id
 -- ...: arguments
-local function format_opcall(id, ...)
+local function format_call(id, ...)
   local types = {}
   for i, arg in ipairs({...}) do table.insert(types, mgl_type(arg)) end
   return id.."("..table.concat(types, ", ")..")"
@@ -88,32 +86,32 @@ end
 
 -- Operator prototypes.
 -- Registered functions taking parameters of specific types.
--- Map of op id => nested tables. Each level contains parameter types as key
--- with the 1-key as the final function and 2-key as the op table index.
+-- Map of operator id => nested tables. Each level contains parameter types as key
+-- with t[1] as the final function and t[2] as the op table index.
 local ops = {}
-local opst = {} -- list/indexed op functions
+local opst = {} -- ops table, list/indexed op functions
 local ops_callbacks = {}
 
 -- Listen to operator definitions.
--- callback(mgl, op): called when an operator definition changes
+-- callback(mgl, op): called when an operator definition changes (prototype update)
 --- mgl: MGL handle
---- op: string
+--- op: operator id
 local function listenOps(callback)
   ops_callbacks[callback] = true
 end
 
--- Unlisten to operator definitions.
+-- Unlisten from operator definitions.
 -- callback: previously registered callback
 local function unlistenOps(callback)
   ops_callbacks[callback] = nil
 end
 
 -- Define operator prototype function.
--- It will replace previous prototype if identical.
+-- It will replace the previous prototype function if identical.
 -- Calling this function will mark the operator for update (old references will
 -- work, but without the updated behavior).
 --
--- func(...): called with operator arguments
+-- func(...): called with operands
 -- ...: strings, operator id and prototype (parameter types)
 --- parameter types: MGL types or special types ("*": any non-nil)
 local function defOp(func, ...)
@@ -133,16 +131,24 @@ local function defOp(func, ...)
   for cb in pairs(ops_callbacks) do cb(mgl, args[1]) end -- call ops listeners
 end
 
+local getop_funcs = {} -- map of params count => func
+
+-- Get operator prototype function.
 -- ...: strings, operator id and prototype (parameter types)
--- return operator function or nothing if not found
+-- return function or falsy if not found / invalid
 local function getOp(...)
-  local t = ops
-  for i, p in ipairs({...}) do
-    local nt = t[p]
-    if not nt then return end
-    t = nt
+  local n = select("#", ...)
+  local f = getop_funcs[n]
+  if not f then
+    local code = mglt_tplsub([[return function(ops, $args) return ops$targs[1] end]], {
+      args = mglt_genlist("a$", 1, n),
+      targs = mglt_genlist("[a$]", 1, n, "")
+    })
+    f = mglt_genfunc(code, "getOp#"..n)()
+    getop_funcs[n] = f
   end
-  return t[1]
+  local ok, op = pcall(f, ops, ...)
+  return ok and op
 end
 
 -- Generate dispatch conditions/call (recursive).
@@ -188,19 +194,19 @@ end
 
 -- Generate operator function.
 -- id: operator id
--- return op function or nothing
+-- return operator function or nothing if not defined
 local function gen_op(id)
   local t = ops[id]
   if t then
     local dcode, depth = gen_op_dispatch(t)
     local code = mglt_tplsub([[
-local id, opst, mgl_type, format_opcall = ...
+local id, opst, mgl_type, format_call = ...
 return function($args)
   local $argst = $types
   do
     $dispatch
   end
-  error("invalid operator prototype "..format_opcall(id $sep $args))
+  error("invalid operator prototype "..format_call(id $sep $args))
 end
     ]], {
       args = mglt_genlist("a$", 1, depth),
@@ -209,7 +215,7 @@ end
       dispatch = dcode,
       sep = depth > 0 and "," or ""
     })
-    return mglt_genfunc(code, "op:"..id)(id, opst, mgl_type, format_opcall)
+    return mglt_genfunc(code, "op:"..id)(id, opst, mgl_type, format_call)
   end
 end
 
@@ -251,6 +257,15 @@ listenOps(function(mgl, op)
   end
 end)
 
+-- build tools module
+local mglt = {
+  genfunc = mglt_genfunc,
+  genlist = mglt_genlist,
+  tplsub = mglt_tplsub,
+  format_proto = format_proto,
+  format_call = format_call
+}
+
 -- build module
 mgl = setmetatable({
   type = mgl_type,
@@ -290,6 +305,9 @@ do
 end
 
 -- load modules
+require("MGL.scalar")(mgl, mglt)
 require("MGL.vector")(mgl, mglt)
+require("MGL.matrix")(mgl, mglt)
+require("MGL.transform")(mgl, mglt)
 
 return mgl, mglt
