@@ -13,9 +13,11 @@ endif::[]
 
 It aims to be simple, generic and optimized (mostly for LuaJIT).
 
+See link:examples[].
+
 == Install
 
-See link:src[].
+See link:src[], link:rockspecs[] or https://luarocks.org/modules/imagicthecat-0a6b669a3a/mgl[luarocks].
 
 == Concept
 
