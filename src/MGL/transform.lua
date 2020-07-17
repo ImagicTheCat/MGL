@@ -109,12 +109,12 @@ return function(mgl, mglt)
     local smt, mt = setmetatable, mgl.types.mat4
     local tan = math.tan
     local function f(hfov, aspect, near, far)
-      local F = tan(hfov/2)*aspect
+      local F = tan(hfov/2)/aspect
       return smt({
         1/(aspect*F), 0, 0, 0,
         0, 1/F, 0, 0,
         0, 0, -(far+near)/(far-near), -(2*far*near)/(far-near),
-        0, 0, -1, 1
+        0, 0, -1, 0
       }, mt)
     end
     mgl.defOp(f, "perspective", "number", "number", "number", "number")
