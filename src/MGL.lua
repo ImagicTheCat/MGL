@@ -305,9 +305,13 @@ do
 end
 
 -- load modules
-require("MGL.scalar")(mgl, mglt)
-require("MGL.vector")(mgl, mglt)
-require("MGL.matrix")(mgl, mglt)
-require("MGL.transform")(mgl, mglt)
 
 return mgl, mglt
+local modulepath = (...) and (...):gsub('%.mgl$', '') .. ".MGL." or ""
+
+
+require(modulepath .. "scalar")(mgl, mglt)
+require(modulepath .. "vector")(mgl, mglt)
+require(modulepath .. "matrix")(mgl, mglt)
+require(modulepath .. "transform")(mgl, mglt)
+
