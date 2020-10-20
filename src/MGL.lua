@@ -274,7 +274,8 @@ mgl = setmetatable({
   defOp = defOp,
   getOp = getOp,
   listenOps = listenOps,
-  unlistenOps = unlistenOps
+  unlistenOps = unlistenOps,
+  tools = mglt
 }, {
   __index = function(self, k)
     -- generate operator
@@ -306,7 +307,6 @@ end
 
 -- load modules
 
-return mgl, mglt
 local modulepath = (...) and (...):gsub('%.mgl$', '') .. ".MGL." or ""
 
 
@@ -315,3 +315,4 @@ require(modulepath .. "vector")(mgl, mglt)
 require(modulepath .. "matrix")(mgl, mglt)
 require(modulepath .. "transform")(mgl, mglt)
 
+return mgl
