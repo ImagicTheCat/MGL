@@ -21,9 +21,10 @@ function testMGLTGenList()
 end
 
 function testMGLTTplSub()
+	-- replace instances of '$key' with value
 	luaunit.assertEquals(mgl.tools.tplsub("$foo $bar", {foo = 'cheese', bar = 'monkeys'}), "cheese monkeys")
+	-- don't touch just 'key'
 	luaunit.assertEquals(mgl.tools.tplsub("$foo bar", {foo = 'cheese', bar = 'monkeys'}), "cheese bar")
-	-- I don't know what all else to test here; tplsub does no error checking
 end
 
 function testMGLTFormatProto()
@@ -36,6 +37,7 @@ function testMGLTFormatProto()
 end
 
 function testMGLTFormatCall()
+	-- same basic deal as format_proto, but get the type of the things passed, instead of the values
 	luaunit.assertEquals(mgl.tools.format_call('foo'), 'foo()')
 	luaunit.assertEquals(mgl.tools.format_call('foo', 5), 'foo(number)')
 	luaunit.assertEquals(mgl.tools.format_call('foo', setmetatable({},{MGL_type = "gerald"}), setmetatable({},{})), 'foo(gerald, table)')
@@ -55,5 +57,35 @@ function testMGLType()
 	luaunit.assertEquals(mgl.type(setmetatable({},{MGL_type = "gerald"})), 'gerald')
 end
 
+function testMGLListenOps()
+	local a_result, b_result
+	local function a(my_mgl, id)
+		-- the first argument must always be mgl itself
+		luaunit.assertEquals(my_mgl, mgl)
+		a_result = id
+	end
+	local function b(my_mgl, id)
+		luaunit.assertEquals(my_mgl, mgl)
+		b_result = id
+	end
+	-- a is there, it gets called
+	mgl.listenOps(a)
+	mgl.publishOps('foo')
+	luaunit.assertEquals(a_result, 'foo')
+	luaunit.assertNil(b_result)
+	-- now both are there, both should get called.
+	a_result = nil
+	mgl.listenOps(b)
+	mgl.publishOps('bar')
+	luaunit.assertEquals(a_result, 'bar')
+	luaunit.assertEquals(b_result, 'bar')
+	-- but now I took a out, so it shouldn't get called any more.
+	a_result = nil
+	b_result = nil
+	mgl.unlistenOps(a)
+	mgl.publishOps('baz')
+	luaunit.assertNil(a_result)
+	luaunit.assertEquals(b_result, 'baz')
+end
 
 os.exit(luaunit.LuaUnit.run())
