@@ -346,19 +346,22 @@ Perspective projection.
 
 === Comparisons
 
-Here are some comparisons with other libraries (only aims to give clues about MGL performances).
+Here are some comparisons with other libraries (only aims to give clues about MGL performances). +
+See link:compare/benchmark.lua[].
 
-Measures are made on a `x86_64 i5-6500 3.6GHz 8Go DDR4` machine. +
-The minimum time and the maximum memory (RSS) of multiple measures is kept. +
-For total times, allocation of entities is taken into account.
+- Measures are made on a `x86_64 i5-6500 3.6GHz 8Go DDR4` machine.
+- The minimum time and the maximum memory of 3 measures is kept.
+- Allocation of entities is measured, but should be negligible.
 
-.Transform 10 000 entities at 60 FPS for 10s (600 ticks).
+.Transform 5000 entities at 60 FPS for 20s (1200 ticks).
 |===
-|name |time (s) |CPU utime (s) |memory (kB) |~ ms/tick |~ frame % |code
+|name|wtime (s) footnote:[Wall-clock time.] |utime (s) footnote:[CPU user time.] |mem (kB) footnote:[Maximum resident set size] |~ ms/tick |~ frame % |code
 
-|GLM GCC -O2 |0.366 |0.362 |4040 |0.597 |4 |link:compare/glm/bench_transform.cpp[]
-|MGL LuaJIT (JIT on) |2.477 |2.371 |19000 |4.112 |25 |link:examples/bench_transform.lua[]
-|CPML LuaJIT (JIT on) |4.224 |4.205 |8984 |7.048 |43 |link:compare/cpml/bench_transform.lua[]
+|GLM GCC -O2 |0.35 |0.35 |3520 |0.292 |2 |link:compare/glm/bench_transform.cpp[]
+|MGL LuaJIT (JIT on) |2.33 |2.26 |10844 |1.942 |12 |link:examples/bench_transform.lua[]
+|CPML LuaJIT (JIT on) |4.24 |4.24 |9732 |3.533 |21 |link:compare/cpml/bench_transform.lua[]
+|MGL LuaJIT (JIT off) |26.07 |26.05 |9896 |21.725 |130 |link:examples/bench_transform.lua[]
+|CPML LuaJIT (JIT off) |27.95 |27.93 |14428 |23.292 |140 |link:compare/cpml/bench_transform.lua[]
 |===
 
 MGL is around 6-7x slower than GLM in this benchmark. It seems fine considering that MGL works on raw tables with a straightforward API (thanks to LuaJIT optimizations like http://wiki.luajit.org/Allocation-Sinking-Optimization[Allocation Sinking]).

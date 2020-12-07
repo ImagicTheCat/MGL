@@ -1,13 +1,13 @@
 -- Bench transformation matrix computation for a list of entities.
 -- https://github.com/excessive/cpml
-package.path = package.path..";src/?.lua"
 local cpml = require("cpml")
 
-local n = ...
-n = tonumber(n) or 1e3
+local ents, ticks = ...
+ents = tonumber(ents) or 1e3
+ticks = tonumber(ticks) or 600
 
 local entities = {}
-for i=1,n do
+for i=1,ents do
   table.insert(entities, {
     position = cpml.vec3.new(math.random(), math.random(), math.random()),
     rotation = cpml.vec3.new(math.random(), math.random(), math.random()),
@@ -23,8 +23,7 @@ local translate = cpml.mat4.translate
 local rotate = cpml.mat4.rotate
 local scale = cpml.mat4.scale
 local identity = cpml.mat4.identity
-local start = os.clock()
-for i=1,600 do
+for i=1,ticks do
   for _, ent in ipairs(entities) do
     local m = identity()
     scale(m, m, ent.scale)
@@ -32,7 +31,6 @@ for i=1,600 do
     rotate(m, m, ent.rotation.y, ay)
     rotate(m, m, ent.rotation.x, ax)
     translate(m, m, ent.position)
+    ent.transform = m
   end
 end
-local ms = (os.clock()-start)/600*1e3
-print("10s of 60 FPS ticks (600) with "..n.." entities: ~"..ms.." ms/tick (~"..math.ceil(ms*6).."% frame)")

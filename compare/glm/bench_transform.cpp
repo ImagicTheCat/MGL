@@ -18,20 +18,22 @@ float randf(){ return rand()/(float)RAND_MAX; }
 int main(int argc, char **argv)
 {
   std::stringstream ss(argc > 1 ? argv[1] : "1000");
-  size_t n;
-  ss >> n;
+  size_t ents, ticks;
+  ss >> ents;
+  ss.clear();
+  ss.str(argc > 2 ? argv[2] : "600");
+  ss >> ticks;
 
-  std::vector<Entity> entities(n);
+  std::vector<Entity> entities(ents);
   for(size_t i = 0; i < entities.size(); i++){
     entities[i].position = glm::vec3(randf(), randf(), randf());
     entities[i].rotation = glm::vec3(randf(), randf(), randf());
     entities[i].scale = glm::vec3(randf(), randf(), randf());
   }
 
-  clock_t start = clock();
   glm::vec3 ax(1,0,0), ay(0,1,0), az(0,0,1);
   
-  for(int i = 0; i < 600; i++){
+  for(int i = 0; i < ticks; i++){
     for(int j = 0; j < entities.size(); j++){
       Entity &e = entities[j];
       e.transform = glm::translate(glm::mat4(), e.position) //
@@ -51,11 +53,6 @@ int main(int argc, char **argv)
       */
     }
   }
-
-  double s = ((double)(clock()-start))/CLOCKS_PER_SEC;
-  double ms = s/600.0*1e3;
-
-  std::cout << "10s of 60 FPS ticks (600) with " << n << " entities: ~" << ms << " ms/tick (~" << ceil(ms*6) << "% frame)" << std::endl;
 
   return 0;
 }
