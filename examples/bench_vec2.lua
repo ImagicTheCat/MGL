@@ -1,4 +1,4 @@
-package.path = package.path..";src/?.lua"
+package.path = "src/?.lua"
 local mgl = require("MGL")
 mgl.gen_vec(2)
 local vec2 = mgl.vec2

@@ -1,2 +1,2 @@
-package.path = package.path..";src/?.lua"
+package.path = "src/?.lua"
 local mgl = require("MGL")

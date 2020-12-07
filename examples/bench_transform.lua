@@ -1,5 +1,5 @@
 -- Bench transformation matrix computation for a list of entities.
-package.path = package.path..";src/?.lua"
+package.path = "src/?.lua"
 local mgl = require("MGL")
 mgl.gen_vec(3)
 mgl.gen_mat(4); mgl.gen_vec(4)
