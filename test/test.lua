@@ -97,7 +97,8 @@ end
 -- find the pure function with that signature
 
 -- these thus must run together in the unit tests; defOp a thing, getOp it
--- then proceed
+-- then proceed to check it's all there and gets called appropriately
+
 
 function testMGLDefOp()
 	local function n(a) return "n" end
