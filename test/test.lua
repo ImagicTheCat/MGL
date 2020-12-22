@@ -88,4 +88,44 @@ function testMGLListenOps()
 	luaunit.assertEquals(b_result, 'baz')
 end
 
+-- defOp: given a function and a list of arg types,
+-- 1. add the function to the argument dispatch table
+-- 2. invalidate the flattened function
+-- 3. publish that the function needs regenerating
+
+-- getOp: given a function name and list of arg types,
+-- find the pure function with that signature
+
+-- these thus must run together in the unit tests; defOp a thing, getOp it
+-- then proceed
+
+function testMGLDefOp()
+	local function n(a) return "n" end
+	local function t(a) return "t" end
+	local function any(a) return "*" end
+	-- okay so.
+	mgl.defOp(n, 'f', 'number')
+	mgl.defOp(any, 'f', '*')
+	luaunit.assertEquals(mgl.getOp('f', 'number'), n)
+	luaunit.assertEquals(mgl.getOp('f', '*'), any)
+	luaunit.assertEquals(mgl.f(5), "n")
+	luaunit.assertEquals(mgl.f({}), "*")
+	mgl.defOp(t, 'f', 'table')
+	luaunit.assertEquals(mgl.getOp('f', 'table'), t)
+	luaunit.assertEquals(mgl.f({}), "t")
+	luaunit.assertEquals(mgl.f(true), "*")
+
+	local function nn(a,b) return "nn" end
+	local function at(a,b) return "*t" end
+
+	mgl.defOp(nn, 'f', 'number', 'number')
+	mgl.defOp(at, 'f', '*', 'table')
+	-- I'm being intentionally picky here.
+	-- the wildcard should pick up in this case:
+	-- this clearly collects to "* table".
+	luaunit.assertEquals(mgl.f(2,3), "nn")
+	luaunit.assertEquals(mgl.f(2,{}), "*t")
+	luaunit.assertErrorMsgContains("invalid", mgl.f, 1, 2, 3)
+end
+
 os.exit(luaunit.LuaUnit.run())
