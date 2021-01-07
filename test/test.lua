@@ -70,22 +70,23 @@ function testMGLListenOps()
 	end
 	-- a is there, it gets called
 	mgl.listenOps(a)
-	mgl.publishOps('foo')
+	mgl.defOp(a, 'foo', 'table', 'string')
 	luaunit.assertEquals(a_result, 'foo')
 	luaunit.assertNil(b_result)
 	-- now both are there, both should get called.
 	a_result = nil
 	mgl.listenOps(b)
-	mgl.publishOps('bar')
+	mgl.defOp(b, 'bar', 'table', 'string')
 	luaunit.assertEquals(a_result, 'bar')
 	luaunit.assertEquals(b_result, 'bar')
 	-- but now I took a out, so it shouldn't get called any more.
+	-- also, adding an op with the same name should just work.
 	a_result = nil
 	b_result = nil
 	mgl.unlistenOps(a)
-	mgl.publishOps('baz')
+	mgl.defOp(b, 'foo', 'table', 'string', 'number')
 	luaunit.assertNil(a_result)
-	luaunit.assertEquals(b_result, 'baz')
+	luaunit.assertEquals(b_result, 'foo')
 end
 
 -- defOp: given a function and a list of arg types,
@@ -104,7 +105,6 @@ function testMGLDefOp()
 	local function n(a) return "n" end
 	local function t(a) return "t" end
 	local function any(a) return "*" end
-	-- okay so.
 	mgl.defOp(n, 'f', 'number')
 	mgl.defOp(any, 'f', '*')
 	luaunit.assertEquals(mgl.getOp('f', 'number'), n)
@@ -113,7 +113,7 @@ function testMGLDefOp()
 	luaunit.assertEquals(mgl.f({}), "*")
 	mgl.defOp(t, 'f', 'table')
 	luaunit.assertEquals(mgl.getOp('f', 'table'), t)
-	luaunit.assertEquals(mgl.f({}), "t")
+	luaunit.assertEquals(mgl.f({}), "t") -- now the table one works
 	luaunit.assertEquals(mgl.f(true), "*")
 
 	local function nn(a,b) return "nn" end
@@ -121,12 +121,15 @@ function testMGLDefOp()
 
 	mgl.defOp(nn, 'f', 'number', 'number')
 	mgl.defOp(at, 'f', '*', 'table')
+	luaunit.assertEquals(mgl.f(2,3), "nn")
 	-- I'm being intentionally picky here.
 	-- the wildcard should pick up in this case:
-	-- this clearly collects to "* table".
-	luaunit.assertEquals(mgl.f(2,3), "nn")
+	-- this clearly collects to "* table" even though it starts with a number
+	-- and so matches the beginning of a different pattern
 	luaunit.assertEquals(mgl.f(2,{}), "*t")
+	-- reject overlong calls.
 	luaunit.assertErrorMsgContains("invalid", mgl.f, 1, 2, 3)
+	luaunit.assertErrorMsgContains("invalid", mgl.f, 1, 2, 3, 4, 5)
 end
 
 os.exit(luaunit.LuaUnit.run())

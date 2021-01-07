@@ -106,10 +106,6 @@ local function unlistenOps(callback)
   ops_callbacks[callback] = nil
 end
 
-local function publishOps(id)
-  for cb in pairs(ops_callbacks) do cb(mgl, id) end
-end
-
 -- Define operator prototype function.
 -- It will replace the previous prototype function if identical.
 -- Calling this function will mark the operator for update (old references will
@@ -132,7 +128,7 @@ local function defOp(func, ...)
   table.insert(opst, func)
   t[1], t[2] = func, #opst
   mgl[args[1]] = nil -- mark operator for update
-  publishOps(args[1]) -- call ops listeners
+  for cb in pairs(ops_callbacks) do cb(mgl, args[1]) end -- call ops listeners
 end
 
 local getop_funcs = {} -- map of params count => func
@@ -278,7 +274,6 @@ mgl = setmetatable({
   getOp = getOp,
   listenOps = listenOps,
   unlistenOps = unlistenOps,
-  publishOps = publishOps,
   tools = mglt
 }, {
   __index = function(self, k)
