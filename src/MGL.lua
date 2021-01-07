@@ -159,8 +159,11 @@ local function gen_op_dispatch(t, depth)
   local codes = {}
   local first = true
   local any_st
+  if t[1] then -- gen: op call
+    table.insert(codes, "if at"..(depth+1).." == 'nil' then return opst["..t[2].."]("..mglt_genlist("a$", 1, depth)..") end\n")
+  end
   for stype, st in pairs(t) do -- each subtype/subtable
-    if type(stype) == "string" then
+    if type(stype) == "string" then -- this skips any actual function named
       if stype == "*" then any_st = st -- special parameter type: any
       else -- regular type
         local scode, sdepth = gen_op_dispatch(st, depth+1)
@@ -174,21 +177,17 @@ local function gen_op_dispatch(t, depth)
       end
     end
   end
-  if not first or any_st then -- gen: nil/any check condition
+  if not first then
+    table.insert(codes, "end\n") -- end the type-based dispatch.
+  end
+  if any_st then -- gen: nil/any check condition
     -- gen: nil check condition (prevent silent mistake)
-    table.insert(codes, (first and "if" or "elseif").." at"..(depth+1).." ~= \"nil\" then\n")
-    if any_st then -- gen: any branch
-      local scode, sdepth = gen_op_dispatch(any_st, depth+1)
-      max_depth = math.max(max_depth, sdepth)
-      table.insert(codes, scode)
-    end
-    first = false
+    table.insert(codes, "if at"..(depth+1).." ~= \"nil\" then\n")
+    local scode, sdepth = gen_op_dispatch(any_st, depth+1)
+    max_depth = math.max(max_depth, sdepth)
+    table.insert(codes, scode)
+    table.insert(codes, "end\n") -- gen: close condition
   end
-  if t[1] then -- gen: op call
-    if not first then table.insert(codes, "else\n") end
-    table.insert(codes, "return opst["..t[2].."]("..mglt_genlist("a$", 1, depth)..")\n")
-  end
-  if not first then table.insert(codes, "end\n") end -- gen: close condition
   return table.concat(codes), max_depth
 end
 
@@ -209,9 +208,9 @@ return function($args)
   error("invalid operator prototype "..format_call(id $sep $args))
 end
     ]], {
-      args = mglt_genlist("a$", 1, depth),
-      argst = mglt_genlist("at$", 1, depth),
-      types = mglt_genlist("mgl_type(a$)", 1, depth),
+      args = mglt_genlist("a$", 1, depth+1), -- create the function with one extra parameter 
+      argst = mglt_genlist("at$", 1, depth+1), -- so I can detect overlong calls
+      types = mglt_genlist("mgl_type(a$)", 1, depth+1),
       dispatch = dcode,
       sep = depth > 0 and "," or ""
     })
@@ -274,7 +273,8 @@ mgl = setmetatable({
   defOp = defOp,
   getOp = getOp,
   listenOps = listenOps,
-  unlistenOps = unlistenOps
+  unlistenOps = unlistenOps,
+  tools = mglt
 }, {
   __index = function(self, k)
     -- generate operator
@@ -305,9 +305,13 @@ do
 end
 
 -- load modules
-require("MGL.scalar")(mgl, mglt)
-require("MGL.vector")(mgl, mglt)
-require("MGL.matrix")(mgl, mglt)
-require("MGL.transform")(mgl, mglt)
 
-return mgl, mglt
+local modulepath = (...) and (...):gsub('%.mgl$', '') .. ".MGL." or ""
+
+
+require(modulepath .. "scalar")(mgl, mglt)
+require(modulepath .. "vector")(mgl, mglt)
+require(modulepath .. "matrix")(mgl, mglt)
+require(modulepath .. "transform")(mgl, mglt)
+
+return mgl
