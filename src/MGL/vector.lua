@@ -1,7 +1,7 @@
 -- https://github.com/ImagicTheCat/MGL
 -- MIT license (see LICENSE or MGL.lua)
 
-local unpack = table.unpack or unpack
+local xtype = require("xtype")
 
 -- Optimization tip:
 -- It seems that the JIT compiler (LuaJIT) can't perform some optimizations in
@@ -10,7 +10,7 @@ local unpack = table.unpack or unpack
 -- Best to get the metatable directly from the parameters.
 
 -- load
-return function(mgl, mglt)
+return function(mgl)
   local generated = {}
   local accessors = { -- vector accessors for each component
     {"x", "r"},
@@ -18,13 +18,40 @@ return function(mgl, mglt)
     {"z", "b"},
     {"w", "a"}
   }
+  local vec = xtype.create("vec")
+  -- loader
+  mgl.addLoader("^vec(%d+)$", function(D)
+    mgl.require_vec(tonumber(D))
+    return mgl["vec"..D]
+  end)
 
-  -- Generate vec(D) vector type.
-  -- D: dimension
-  function mgl.gen_vec(D)
-    if generated[D] then return end -- prevent regeneration
-    local vtype = "vec"..D
-    local mt = mgl.types[vtype]
+  -- Require vec(D) vector type.
+  -- D: (optional) dimension
+  -- return vec(D) or vec xtype
+  function mgl.require_vec(D)
+    if not D then return vec end
+    if D <= 1 then error("invalid vector dimension") end
+    if generated[D] then return generated[D] end -- prevent regeneration
+    -- create type
+    local Tname = "vec"..D
+    local T = xtype.create(Tname, vec)
+    generated[D] = T
+    T.D = D
+    T.mt = {
+      xtype = T,
+      __add = xtype.op.add,
+      __sub = xtype.op.sub,
+      __mul = xtype.op.mul,
+      __div = xtype.op.div,
+      __mod = xtype.op.mod,
+      __pow = xtype.op.pow,
+      __concat = xtype.op.concat,
+      __eq = xtype.op.eq,
+      __lt = xtype.op.lt,
+      __le = xtype.op.le
+    }
+    -- init multifunctions
+    mgl.initmfs(Tname, "copy", "length", "normalize", "dot", "cross")
 
     -- DATA
     -- gen: getters
@@ -38,15 +65,14 @@ return function(mgl, mglt)
         table.insert(codes, " then return t["..i.."]\n")
       end
       table.insert(codes, "end")
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 return function(t, k)
   $dispatch
 end
       ]], {dispatch = table.concat(codes)})
-      local f = mglt.genfunc(code, vtype..":get")()
-      mt.__index = f
+      local f = mgl.genfunc(code, Tname..":get")()
+      T.mt.__index = f
     end
-
     -- gen: setters
     do
       local codes = {}
@@ -58,234 +84,211 @@ end
         table.insert(codes, " then t["..i.."] = v\n")
       end
       table.insert(codes, "else rawset(t,k,v) end")
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local rawset = rawset
 return function(t, k, v)
   $dispatch
 end
       ]], {dispatch = table.concat(codes)})
-      local f = mglt.genfunc(code, vtype..":set")()
-      mt.__newindex = f
+      local f = mgl.genfunc(code, Tname..":set")()
+      T.mt.__newindex = f
     end
-
     -- gen: copy
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 return function(a,b)
   $ops
 end
-      ]], {ops = mglt.genlist("a[$] = b[$]", 1, D, "\n")})
-      local f = mglt.genfunc(code, vtype..":copy")()
-      mgl.defOp(f, "copy", vtype, vtype)
-    end
-
-    -- CONSTRUCTORS
-    -- gen: constructor scalars
-    do
-      local ptypes = {}; for i=1,D do table.insert(ptypes, "number") end
-      local code = mglt.tplsub([[
-local mt = ...
-local smt = setmetatable
-return function($args) return smt({$args}, mt) end
-      ]], {args = mglt.genlist("a$", 1, D)})
-      local f = mglt.genfunc(code, vtype..":constructor_scalars")(mt)
-      mgl.defOp(f, vtype, unpack(ptypes))
-    end
-
-    -- gen: constructor scalar
-    do
-      local code = mglt.tplsub([[
-local mt = ...
-local smt = setmetatable
-return function(x) return smt({$xs}, mt) end
-      ]], {xs = mglt.genlist("x", 1, D)})
-      local f = mglt.genfunc(code, vtype..":constructor_scalar")(mt)
-      mgl.defOp(f, vtype, "number")
-    end
-
-    -- gen: constructor list
-    do
-      local code = mglt.tplsub([[
-local mt = ...
-local smt = setmetatable
-return function(t) return smt({$ts}, mt) end
-      ]], {ts = mglt.genlist("t[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":constructor_list")(mt)
-      mgl.defOp(f, vtype, "table")
-    end
-
-    -- gen: constructors composed
-    -- Two elements: vector and vector/scalar.
-    -- The first element number of dimensions is always greater than or equal to the second.
-    for i=math.max(math.ceil(D/2), 2), D-1 do
-      local D1, D2 = i, D-i
-      local code = mglt.tplsub([[
-local mt = ...
-local smt = setmetatable
-return function(a,b) return smt({$as, $bs}, mt) end
-      ]], {
-        as = mglt.genlist("a[$]", 1, D1),
-        bs = D2 > 1 and mglt.genlist("b[$]", 1, D2) or "b",
-      })
-      local f = mglt.genfunc(code, vtype..":constructor_composed:"..D1.."+"..D2)(mt)
-      mgl.defOp(f, vtype, "vec"..D1, (D2 > 1 and "vec"..D2 or "number"))
-    end
-
-    -- gen: constructor truncate
-    do
-      local code = mglt.tplsub([[
-local mt = ...
-local smt = setmetatable
-return function(a) return smt({$as}, mt) end
-      ]], {as = mglt.genlist("a[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":constructor_truncate")(mt)
-      mgl.defOp(f, vtype, "vec"..(D+1))
-    end
-
-    -- gen: constructor copy
-    do
-      local code = mglt.tplsub([[
-local gmt, smt = getmetatable, setmetatable
-return function(a) return smt({$vs}, gmt(a)) end
-      ]], {vs = mglt.genlist("a[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":constructor_copy")()
-      mgl.defOp(f, vtype, vtype)
+      ]], {ops = xtype.tpllist("a[$] = b[$]", 1, D, "\n")})
+      local f = mgl.genfunc(code, Tname..":copy")()
+      mgl.copy:define(f, T, T)
     end
 
     -- MISC
     -- gen: tostring
     do
-      local code = mglt.tplsub([[return function(a) return "("..$cs..")" end]], --
-        {cs = mglt.genlist("a[$]", 1, D, [[..","..]])})
-      local f = mglt.genfunc(code, vtype..":tostring")()
-      mgl.defOp(f, "tostring", vtype)
+      local code = xtype.tplsub([[return function(a) return "("..$cs..")" end]], --
+        {cs = xtype.tpllist("a[$]", 1, D, [[..","..]])})
+      local f = mgl.genfunc(code, Tname..":tostring")()
+      T.mt.__tostring = f
+    end
+
+    -- CONSTRUCTORS
+    -- gen: generic constructor
+    mgl[Tname]:addGenerator(function(mf, ...)
+      local sign = {...}
+      -- build init list code
+      local initl = {}
+      for i, t in ipairs(sign) do
+        if t == "number" then -- scalar
+          table.insert(initl, "a"..i)
+        elseif xtype.of(t, vec) then -- vec
+          for j=1, t.D do table.insert(initl, "a"..i.."["..j.."]") end
+        else return end -- invalid type
+      end
+      if #initl < D then return end -- check complete
+      if #sign ~= 1 and #initl > D then return end -- check valid truncation
+      -- main code
+      local code = xtype.tplsub([[
+local mt = ...
+local smt = setmetatable
+return function($as) return smt({$init}, mt) end
+      ]], {
+        as = xtype.tpllist("a$", 1, #sign),
+        init = table.concat(initl, ", ", 1, D)
+      })
+      -- compile
+      local f = mgl.genfunc(code, Tname..":generic_constructor")(T.mt)
+      mgl[Tname]:define(f, ...)
+    end)
+
+    -- gen: scalar constructor
+    do
+      local code = xtype.tplsub([[
+local mt = ...
+local smt = setmetatable
+return function(x) return smt({$xs}, mt) end
+      ]], {xs = xtype.tpllist("x", 1, D)})
+      local f = mgl.genfunc(code, Tname..":scalar_constructor")(T.mt)
+      mgl[Tname]:define(f, "number")
+    end
+
+    -- gen: table list constructor
+    do
+      local code = xtype.tplsub([[
+local mt = ...
+local smt = setmetatable
+return function(t) return smt({$ts}, mt) end
+      ]], {ts = xtype.tpllist("t[$]", 1, D)})
+      local f = mgl.genfunc(code, Tname..":table_list_constructor")(T.mt)
+      mgl[Tname]:define(f, "table")
     end
 
     -- COMPARISON
     -- gen: equal
     do
-      local code = mglt.tplsub([[return function(a, b) return $expr end]], --
-        {expr = mglt.genlist("a[$] == b[$]", 1, D, " and ")})
-      local f = mglt.genfunc(code, vtype..":equal")()
-      mgl.defOp(f, "equal", vtype, vtype)
+      local code = xtype.tplsub([[return function(a, b) return $expr end]], --
+        {expr = xtype.tpllist("a[$] == b[$]", 1, D, " and ")})
+      local f = mgl.genfunc(code, Tname..":equal")()
+      xtype.op.eq:define(f, T, T)
     end
 
     -- BASIC ARITHMETIC
     -- gen: unm
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(a) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("-a[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":unm")()
-      mgl.defOp(f, "unm", vtype)
+      ]], {opl = xtype.tpllist("-a[$]", 1, D)})
+      local f = mgl.genfunc(code, Tname..":unm")()
+      T.mt.__unm = f
     end
 
     -- gen: add
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(a, b) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("a[$]+b[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":add")()
-      mgl.defOp(f, "add", vtype, vtype)
+      ]], {opl = xtype.tpllist("a[$]+b[$]", 1, D)})
+      local f = mgl.genfunc(code, Tname..":add")()
+      xtype.op.add:define(f, T, T)
     end
 
     -- gen: sub
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(a, b) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("a[$]-b[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":sub")()
-      mgl.defOp(f, "sub", vtype, vtype)
+      ]], {opl = xtype.tpllist("a[$]-b[$]", 1, D)})
+      local f = mgl.genfunc(code, Tname..":sub")()
+      xtype.op.sub:define(f, T, T)
     end
 
     -- gen: mul
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(a, b) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("a[$]*b[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":mul")()
-      mgl.defOp(f, "mul", vtype, vtype)
+      ]], {opl = xtype.tpllist("a[$]*b[$]", 1, D)})
+      local f = mgl.genfunc(code, Tname..":mul")()
+      xtype.op.mul:define(f, T, T)
     end
 
     -- gen: mul number
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(a, n) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("a[$]*n", 1, D)})
-      local f = mglt.genfunc(code, vtype..":mul_number")()
-      mgl.defOp(f, "mul", vtype, "number")
+      ]], {opl = xtype.tpllist("a[$]*n", 1, D)})
+      local f = mgl.genfunc(code, Tname..":mul_number")()
+      xtype.op.mul:define(f, T, "number")
     end
 
     -- gen: mul number alt
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(n, a) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("a[$]*n", 1, D)})
-      local f = mglt.genfunc(code, vtype..":mul_number_alt")()
-      mgl.defOp(f, "mul", "number", vtype)
+      ]], {opl = xtype.tpllist("n*a[$]", 1, D)})
+      local f = mgl.genfunc(code, Tname..":mul_number_alt")()
+      xtype.op.mul:define(f, "number", T)
     end
 
     -- gen: div
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(a, b) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("a[$]/b[$]", 1, D)})
-      local f = mglt.genfunc(code, vtype..":div")()
-      mgl.defOp(f, "div", vtype, vtype)
+      ]], {opl = xtype.tpllist("a[$]/b[$]", 1, D)})
+      local f = mgl.genfunc(code, Tname..":div")()
+      xtype.op.div:define(f, T, T)
     end
 
     -- gen: div number
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local gmt, smt = getmetatable, setmetatable
 return function(a, n) return smt({$opl}, gmt(a)) end
-      ]], {opl = mglt.genlist("a[$]/n", 1, D)})
-      local f = mglt.genfunc(code, vtype..":div_number")()
-      mgl.defOp(f, "div", vtype, "number")
+      ]], {opl = xtype.tpllist("a[$]/n", 1, D)})
+      local f = mgl.genfunc(code, Tname..":div_number")()
+      xtype.op.div:define(f, T, "number")
     end
 
     -- OPERATIONS
     -- gen: length
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local sqrt = math.sqrt
 return function(a) return sqrt($expr) end
-      ]], {expr = mglt.genlist("a[$]*a[$]", 1, D, "+")})
-      local f = mglt.genfunc(code, vtype..":length")()
-      mgl.defOp(f, "length", vtype)
+      ]], {expr = xtype.tpllist("a[$]*a[$]", 1, D, "+")})
+      local f = mgl.genfunc(code, Tname..":length")()
+      mgl.length:define(f, T)
     end
 
     -- gen: normalize
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 local sqrt = math.sqrt
 local gmt, smt = getmetatable, setmetatable
 return function(a)
   local length = sqrt($length_expr)
-  return smt({$opl}, gmt(a)), length
+  return smt({$opl}, gmt(a))
 end
       ]], {
-        length_expr = mglt.genlist("a[$]*a[$]", 1, D, "+"),
-        opl = mglt.genlist("a[$]/length", 1, D)
+        length_expr = xtype.tpllist("a[$]*a[$]", 1, D, "+"),
+        opl = xtype.tpllist("a[$]/length", 1, D)
       })
-      local f = mglt.genfunc(code, vtype..":normalize")()
-      mgl.defOp(f, "normalize", vtype)
+      local f = mgl.genfunc(code, Tname..":normalize")()
+      mgl.normalize:define(f, T)
     end
 
     -- gen: dot
     do
-      local code = mglt.tplsub([[
+      local code = xtype.tplsub([[
 return function(a, b) return $expr end
-      ]], {expr = mglt.genlist("a[$]*b[$]", 1, D, "+")})
-      local f = mglt.genfunc(code, vtype..":dot")()
-      mgl.defOp(f, "dot", vtype, vtype)
+      ]], {expr = xtype.tpllist("a[$]*b[$]", 1, D, "+")})
+      local f = mgl.genfunc(code, Tname..":dot")()
+      mgl.dot:define(f, T, T)
     end
 
     -- gen: cross
@@ -298,9 +301,9 @@ return function(a, b) return $expr end
           a[1]*b[2]-a[2]*b[1]
         }, gmt(a))
       end
-      mgl.defOp(f, "cross", "vec3", "vec3")
+      mgl.cross:define(f, T, T)
     end
 
-    generated[D] = true
+    return T
   end
 end

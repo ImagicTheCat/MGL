@@ -1,8 +1,7 @@
 -- Bench transformation matrix computation for a list of entities.
-package.path = "src/?.lua;../src/?.lua"
+package.path = "src/?.lua;../src/?.lua;"..package.path
 local mgl = require("MGL")
-mgl.gen_vec(3)
-mgl.gen_mat(4); mgl.gen_vec(4)
+local tvec3 = mgl.require_vec(3)
 
 local ents, ticks = ...
 ents = tonumber(ents) or 1e3
@@ -21,9 +20,10 @@ local ax = mgl.vec3(1,0,0)
 local ay = mgl.vec3(0,1,0)
 local az = mgl.vec3(0,0,1)
 local rad = math.rad
-local translate = mgl.getOp("translate", "vec3")
-local rotate = mgl.getOp("rotate", "vec3", "number")
-local scale = mgl.getOp("scale", "vec3")
+local translate = mgl.translate:resolve(tvec3)
+local rotate = mgl.rotate:resolve(tvec3, "number")
+local scale = mgl.scale:resolve(tvec3)
+-- Note: the multiplication may also be pre-resolved to slightly increase performances, but is avoided here for readability.
 for i=1,ticks do
   for _, ent in ipairs(entities) do
     ent.transform = translate(ent.position) --

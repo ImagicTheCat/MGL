@@ -9,7 +9,9 @@ endif::[]
 :toc: left
 :toclevels: 5
 
-**M**athematics for **G**raphics in pure **L**ua (or **M**athematics for Open**GL**, also an anagram of https://glm.g-truc.net/0.9.9/index.html[GLM]; an inspiration for the library) is a math library for graphics purposes.
+**M**athematics for **G**raphics in pure **L**ua (or **M**athematics for Open**GL**, also an anagram of https://glm.g-truc.net/0.9.9/index.html[GLM]; an inspiration for the library with https://en.wikipedia.org/wiki/OpenGL_Shading_Language[GLSL]) is a math library for graphics purposes.
+
+It depends on the dynamic https://github.com/ImagicTheCat/lua-xtype[xtype] system.
 
 It aims to be simple, generic and optimized (mostly for LuaJIT).
 
@@ -19,136 +21,47 @@ See link:examples[].
 
 See link:src[], link:rockspecs[] or https://luarocks.org/modules/imagicthecat-0a6b669a3a/mgl[luarocks].
 
-== Concept
-
-MGL design is around types and operators.
-
-=== Operators
-
-Operators have defined behavior for specific prototypes (a list of parameter types: MGL/special types).
-
-Any operator prototype can be (re)defined.
-
-WARNING: When an operator prototype is (re)defined, it will (re)generate the operator function. Previously referenced operators will still work, but without the updated behavior. `listenOps` can be used to update those references.
-
-NOTE: Operators will lazily check for expected parameters, additional arguments will not trigger an error if a prototype matches.
-
-=== Types
-
-MGL types can be Lua types (number, boolean, etc.) or table-based types from the metatable pool.
-
-All types are recognized by a string: the name from the metatable pool or the result of the Lua `type` function.
-
-NOTE: The references from the metatable pool should normally be constants, but the content of the metatable can be modified.
-
-
-.Table-based types have pre-defined metamethods to call basic operators:
-[horizontal]
-__tostring:: tostring
-__unm:: unm
-__add:: add
-__sub:: sub
-__mul:: mul
-__div:: div
-__mod:: mod
-__pow:: pow
-__eq:: equal
-__lt:: lessThan
-__le:: lessEqual
-
-Types can have specialized metamethods; for example, to implement accessors.
-
-NOTE: Accessors are implemented as simple as possible, they are check free.
-
-=== Generic types
-
-Generic types are used to generate types based on some parameters.
-
-For example, `vec(D)` for a vector of dimension `D` or `mat(N)x(M)` / `mat(N)` (if square) for a matrix of size `M x N`.
-
 == API
 
 === Module
 
 [source,lua]
 ----
--- Loading the module will return (mgl, mglt).
-
--- MGL
-
--- Operator prototypes.
--- Registered functions taking parameters of specific types.
--- Map of operator id => nested tables. Each level contains parameter types as key
--- with t[1] as the final function and t[2] as the op table index.
-mgl.ops
-
--- MGL types metatable pool.
--- Accessing a nil field will create the type.
--- map of MGL type => metatable
-mgl.types
-
--- return MGL type (table-based type name or Lua type)
-mgl.type(v)
-
--- Define operator prototype function.
--- It will replace the previous prototype function if identical.
--- Calling this function will mark the operator for update (old references will
--- work, but without the updated behavior).
---
--- func(...): called with operands
--- ...: strings, operator id and prototype (parameter types)
---- parameter types: MGL types or special types ("*": any non-nil)
-mgl.defOp(func, ...)
-
--- Get operator prototype function.
--- ...: strings, operator id and prototype (parameter types)
--- return function or falsy if not found / invalid
-mgl.getOp(...)
-
--- Listen to operator definitions.
--- callback(mgl, op): called when an operator definition changes (prototype update)
---- mgl: MGL handle
---- op: operator id
-mgl.listenOps(callback)
-
--- Unlisten from operator definitions.
--- callback: previously registered callback
-mgl.unlistenOps(callback)
-
--- Operators.
--- mgl.<...>
-
--- MGL tools
+-- Add MGL loader.
+-- pattern: Lua pattern
+-- callback(...): called when an undefined field is accessed with the specified pattern
+--- ...: pattern captures (returned by string.match)
+--- should return the field value
+mgl.addLoader(pattern, callback)
 
 -- Generate function.
 -- name: identify the generated function for debug
-mglt.genfunc(code, name)
+mgl.genfunc(code, name)
 
--- Generate "a1, a2, a3, a4..." list string.
--- t_element: string where "$" will be replaced by the element index
--- a: start index
--- b: end index
--- separator: (optional) default: ", "
-mglt.genlist(t_element, a, b, separator)
-
--- Template substitution.
--- template: string with $... parameters
--- args: map of param => value
--- return processed template
-mglt.tplsub(template, args)
-
--- Format prototype for debug.
--- id: operator id
--- ...: parameter types
-mglt.format_proto(id, ...)
-
--- Format call prototype for debug.
--- id: operator id
--- ...: arguments
-mglt.format_call(id, ...)
+-- Initialize operation multifunctions.
+-- ...: list of identifiers
+mgl.initmfs(...)
 ----
 
 === Types
+
+.MGL types may have predefined metamethods such as:
+[horizontal]
+__tostring:: tostring
+__unm:: unm
+__add:: xtype add
+__sub:: xtype sub
+__mul:: xtype mul
+__div:: xtype div
+__mod:: xtype mod
+__pow:: xtype pow
+__eq:: xtype eq
+__lt:: xtype lt
+__le:: xtype le
+
+Types can have specialized metamethods; for example, to implement accessors.
+
+NOTE: Accessors are implemented as simple as possible, they are check free.
 
 ==== vec(D)
 
@@ -156,9 +69,13 @@ Generic vector type of dimension `D`, stored as an array/list of scalars (table)
 
 [source,lua]
 ----
--- Generate vec(D) vector type.
--- D: dimension
-mgl.gen_vec(D)
+-- Require vec(D) vector type.
+-- D: (optional) dimension
+-- return vec(D) or vec xtype
+mgl.require_vec(D)
+
+-- Loader pattern.
+mgl.vecD
 
 -- Accessors.
 -- vec.x / vec.r (vec[1])
@@ -178,55 +95,26 @@ The choice of columns as vectors is about following mathematical conventions (`M
 
 [source,lua]
 ----
--- Generate mat(N)(M)/mat(N) vector type.
--- N: columns
+-- Require mat(N)(M)/mat(N) vector type.
+-- Matrix values are stored as a row-major ordered list; columns are vectors.
+-- N: (optional) columns
 -- M: (optional) rows (default: N)
-mgl.gen_mat(N, M)
+-- return mat(N)(M)/mat(N) or mat xtype
+mgl.require_mat(N, M)
+
+-- Loader patterns.
+mgl.matNxM
+mgl.matN -- square
 
 -- Vector accessor (get/set column vector).
 -- idx: column index
 -- vec: (optional) vec(M), set column
 mat:v(idx, vec)
-
-mat.M, mat.N -- dimensions
 ----
 
 === Operators
 
-==== vec(D)
-
-Vector constructor.
-
-`(number: scalars...): vec(D)`:: Scalars constructor. `#scalars... == D`
-`(number: scalar): vec(D)`:: Scalar constructor.
-`(table: list): vec(D)`:: List constructor. `#list >= D`
-`(vec(D): a): vec(D)`:: Copy constructor.
-`(vec(D+1): a): vec(D)`:: Truncate constructor.
-`(vec(A): a, vec(B) or scalar: b): vec(D)`::
-+
-Composed constructor. +
-Vector and vector/scalar: `1 < A < D` and `B +++<=+++ A`.
-+
-.Examples
-- `vec3(vec2(1), 1)`
-- `vec4(vec2(1), vec2(1))`
-- `vec4(vec3(1), 1)`
-
-==== mat(N)x(M) / mat(N)
-
-Matrix constructor.
-
-`(number: scalar): mat(N)x(M)`:: Scalar constructor. Create matrix with `scalar` along the identity diagonal.
-`(table: list): mat(N)x(M)`:: List constructor. `#list >= N*M`
-`(mat(N)x(M): a): mat(N)x(M)`:: Copy constructor.
-`(vec(M): columns...): mat(N)x(M)`:: Column vectors constructor. `#columns... == N`
-`(mat(N-1): a): mat(N)`:: Square extend constructor. Fill with identity.
-`(mat(N+1): a): mat(N)`:: Square truncate constructor.
-
-==== copy
-
-`(vec(D): dst, vec(D): src)`:: -
-`(mat(N)x(M): dst, mat(N)x(M): src)`:: -
+Binary operators are implemented through *xtype* op multifunctions.
 
 ==== tostring
 
@@ -260,13 +148,7 @@ Unary minus.
 `(vec(D): a, vec(D): b): vec(D)`:: Component-wise multiplication.
 `(vec(D): a, number: b): vec(D)`:: -
 `(number: a, vec(D): b): vec(D)`:: -
-`(mat(N): a, mat(N): b): mat(N)`:: Square matrix multiplication.
-`(mat(N): a, vec(N): b): vec(N)`:: Square matrix/vector multiplication.
-`(mat(N)x(M): a, mat(O)x(N) or vec(N): b): mat(O)x(M) or vec(M)`::
-+
-Matrix/vector general multiplication (implemented with the special type `*` for the second parameter). +
-Will return a vector if the result has a single column.
-
+`(mat(N)x(M): a, mat(O)x(N) or vec(N): b): mat(O)x(M) or vec(M)`:: Matrix/vector general multiplication. Will return a vector if the result has a single column.
 `(mat(N)x(M): a, number: b): mat(N)x(M)`:: -
 `(number: a, mat(N)x(M): b): mat(N)x(M)`:: -
 
@@ -276,13 +158,40 @@ Will return a vector if the result has a single column.
 `(vec(D): a, number: b): vec(D)`:: -
 `(mat(N)x(M): a, number: b): mat(N)x(M)`:: -
 
+=== Operations
+
+Operations are *xtype* multifunctions.
+
+==== vec(D)
+
+Vector constructor.
+
+`(number: scalar): vec(D)`:: Scalar constructor.
+`(table: list): vec(D)`:: List constructor. `#list >= D`
+`(number or vec(D): ...): vec(D)`:: Composed constructor. Any combination of scalars and vectors matching the result vector size.
+`(vec(D+x): v): vec(D)`:: Truncate constructor.
+
+==== mat(N)x(M) / mat(N)
+
+Matrix constructor.
+
+`(number: scalar): mat(N)x(M)`:: Scalar constructor. Create matrix with `scalar` along the identity diagonal.
+`(table: list): mat(N)x(M)`:: List constructor. `#list >= N*M`
+`(vec(M): columns...): mat(N)x(M)`:: Column vectors constructor. `#columns... == N`
+`(mat(Na, Ma): a): mat(N)x(M)`:: Generic matrix constructor. Copy/extend/truncate a same/smaller/bigger matrix (fill with identity when extending).
+
+==== copy
+
+`(vec(D): dst, vec(D): src)`:: -
+`(mat(N)x(M): dst, mat(N)x(M): src)`:: -
+
 ==== length
 
 `(vec(D): a): number`:: Vector length (Euclidean).
 
 ==== normalize
 
-`(vec(D): a): vec(D), number`:: Vector normalization. Also returns length.
+`(vec(D): a): vec(D)`:: Vector normalization.
 
 ==== dot
 
@@ -337,19 +246,14 @@ Perspective projection.
 
 == Performances
 
-.Notes
-- Operators branch to operator prototypes with a generated type-checking function.
-- More an operator has prototypes, more it has type-checking code: best to only generate required types.
-- This has an overhead, but it is probably less significant with the LuaJIT interpreter than PUC Lua.
-- Furthermore, the LuaJIT compiler may eliminate all of the overhead.
-- In any case, the operator prototype can be retrieved and cached with `getOp` when optimizations are needed.
+TIP: An operator/operation definition can be retrieved and cached with `multifunction:resolve(...)` when optimizations are needed.
 
 === Comparisons
 
 Here are some comparisons with other libraries (only aims to give clues about MGL performances). +
 See link:compare/benchmark.lua[].
 
-- Measures are made on a `x86_64 i5-6500 3.6GHz 8Go DDR4` machine.
+- Measures are made on a `x86_64 i5-6500 3.6GHz 16Go DDR4` machine.
 - The minimum time and the maximum memory of 3 measures is kept.
 - Allocation of entities is measured, but should be negligible.
 
@@ -357,11 +261,11 @@ See link:compare/benchmark.lua[].
 |===
 |name|wtime (s) footnote:[Wall-clock time.] |utime (s) footnote:[CPU user time.] |mem (kB) footnote:[Maximum resident set size] |~ ms/tick |~ frame % |code
 
-|GLM GCC -O2 |0.35 |0.35 |3520 |0.292 |2 |link:compare/glm/bench_transform.cpp[]
-|MGL LuaJIT (JIT on) |2.33 |2.26 |10844 |1.942 |12 |link:examples/bench_transform.lua[]
-|CPML LuaJIT (JIT on) |4.24 |4.24 |9732 |3.533 |21 |link:compare/cpml/bench_transform.lua[]
-|MGL LuaJIT (JIT off) |26.07 |26.05 |9896 |21.725 |130 |link:examples/bench_transform.lua[]
-|CPML LuaJIT (JIT off) |27.95 |27.93 |14428 |23.292 |140 |link:compare/cpml/bench_transform.lua[]
+|GLM GCC -O2 |0.98 |0.98 |3456 |0.817 |5 |link:compare/glm/bench_transform.cpp[]
+|MGL LuaJIT (JIT on) |2.56 |2.51 |11032 |2.133 |13 |link:examples/bench_transform.lua[]
+|CPML LuaJIT (JIT on) |4.25 |4.24 |9780 |3.542 |21 |link:compare/cpml/bench_transform.lua[]
+|CPML LuaJIT (JIT off) |27.59 |27.57 |14396 |22.992 |138 |link:compare/cpml/bench_transform.lua[]
+|MGL LuaJIT (JIT off) |27.8 |27.77 |9972 |23.167 |139 |link:examples/bench_transform.lua[]
 |===
 
 MGL is around 6-7x slower than GLM in this benchmark. It seems fine considering that MGL works on raw tables with a straightforward API (thanks to LuaJIT optimizations like http://wiki.luajit.org/Allocation-Sinking-Optimization[Allocation Sinking]).

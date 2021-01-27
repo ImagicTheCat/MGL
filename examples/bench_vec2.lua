@@ -1,6 +1,5 @@
-package.path = "src/?.lua"
+package.path = "src/?.lua;"..package.path
 local mgl = require("MGL")
-mgl.gen_vec(2)
 local vec2 = mgl.vec2
 
 local n = ...
@@ -9,6 +8,4 @@ print("iterations", n)
 
 local v = vec2(0,0)
 for i=1,n do v = v+vec2(1,-1) end
-v = v*5
-print(v)
-assert(v[1] == n*5 and v[2] == -n*5)
+assert(v[1] == n and v[2] == -n)

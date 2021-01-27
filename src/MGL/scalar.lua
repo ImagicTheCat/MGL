@@ -2,5 +2,5 @@
 -- MIT license (see LICENSE or MGL.lua)
 
 -- load
-return function(mgl, mglt)
+return function(mgl)
 end

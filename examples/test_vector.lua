@@ -1,34 +1,34 @@
-package.path = "src/?.lua"
+package.path = "src/?.lua;"..package.path
 local mgl = require("MGL")
-mgl.gen_vec(2)
-mgl.gen_vec(3)
-mgl.gen_vec(4)
 
-local a = mgl.vec3(1)
-local b = mgl.vec3(a)
-local c = mgl.vec4(1)
-print(a,b,c)
-
-assert(a == b)
-b = b*2; assert(a ~= b)
-assert(b-a == mgl.vec3(1,1,1))
-assert(b+a == mgl.vec3({3,3,3}))
-assert(mgl.vec4(mgl.vec3(1), 0) == mgl.vec4(mgl.vec2(1), mgl.vec2(1,0)))
-assert(mgl.vec3(mgl.vec4(1)) == mgl.vec3(1))
-assert(a*b == b)
-assert(a*-2 == -b)
-assert(mgl.vec3(1)/b == mgl.vec3(0.5))
-assert(b/4 == mgl.vec3(0.5))
+-- tostring
+print(mgl.vec3(1))
+do
+  -- getters/setters
+  local v = mgl.vec4(1)
+  v.x, v.y, v.z, v.w = 1,2,3,4
+  assert(v == mgl.vec4(1,2,3,4))
+  assert(v.x == 1 and v.y == 2 and v.z == 3 and v.w == 4)
+  -- copy
+  local vc = mgl.vec4(1)
+  mgl.copy(vc, v)
+  assert(vc == v)
+end
+-- constructors
+assert(mgl.vec2(0) == mgl.vec2(0,0)) -- scalar
+assert(mgl.vec4({1,2,3,4}) == mgl.vec4(1,2,3,4)) -- table list
+--- generic
+assert(mgl.vec10(1, mgl.vec2(2), mgl.vec3(3), mgl.vec4(4)) == mgl.vec10(1,2,2,3,3,3,4,4,4,4))
+assert(mgl.vec2(mgl.vec4(1,2,3,4)) == mgl.vec2(1,2)) -- truncation
+-- arithmetic/comparison
+assert(-mgl.vec2(1) == mgl.vec2(-1)) -- unm
+--- add/sub/mul/div
+assert(mgl.vec2(1)+mgl.vec2(1)*mgl.vec2(3)-mgl.vec2(1) == mgl.vec2(6)/mgl.vec2(2))
+assert(mgl.vec2(1)*2 == 2*mgl.vec2(1)) -- mul number
+assert(mgl.vec2(2)/2 == mgl.vec2(1)) -- div number
+-- length/normalize
 assert(mgl.length(mgl.vec4(4)) == 8)
 assert(mgl.length(mgl.normalize(mgl.vec4(4))) == 1)
-assert(mgl.dot(a,b) == 6)
+-- dot/cross
+assert(mgl.dot(mgl.vec3(1,2,3), mgl.vec3(4,5,6)) == 32)
 assert(mgl.cross(mgl.vec3(1,0,0), mgl.vec3(0,1,0)) == mgl.vec3(0,0,1))
-a.x, a.y, a.z, a.w = 1,2,3,4
-assert(c.x == c[1] and c.r == c[1])
-assert(c.y == c[2] and c.g == c[2])
-assert(c.z == c[3] and c.b == c[3])
-assert(c.w == c[4] and c.a == c[4])
-local a2 = mgl.vec3(1); mgl.copy(a2, a)
-assert(a2 == a)
-
-print(a,b,c)
