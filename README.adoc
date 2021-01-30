@@ -268,4 +268,4 @@ See link:compare/benchmark.lua[].
 |MGL LuaJIT (JIT off) |27.8 |27.77 |9972 |23.167 |139 |link:examples/bench_transform.lua[]
 |===
 
-MGL is around 6-7x slower than GLM in this benchmark. It seems fine considering that MGL works on raw tables with a straightforward API (thanks to LuaJIT optimizations like http://wiki.luajit.org/Allocation-Sinking-Optimization[Allocation Sinking]).
+MGL is around 2-3x slower than GLM in this benchmark. It seems fine considering that MGL works on raw tables with a straightforward API (thanks to LuaJIT optimizations like http://wiki.luajit.org/Allocation-Sinking-Optimization[Allocation Sinking]).
